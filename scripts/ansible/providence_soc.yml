@@ -1,0 +1,218 @@
+---
+# Providence SOC - Ansible Playbook
+# Despliegue y configuración de componentes de seguridad
+
+- name: Provision Providence SOC
+  hosts: all
+  become: yes
+  vars:
+    siem_server: "10.10.20.10"
+    wazuh_manager: "10.10.20.20"
+    dns_server: "10.10.50.5"
+    domain: "providence.local"
+    ntp_server: "10.10.50.5"
+  
+  tasks:
+    # ============================================================
+    # COMMON TASKS - Todos los servidores
+    # ============================================================
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install common packages
+      package:
+        name:
+          - curl
+          - wget
+          - vim
+          - git
+          - htop
+          - net-tools
+          - tcpdump
+          - nmap
+          - fail2ban
+          - auditd
+        state: present
+
+    - name: Configure NTP client
+      template:
+        src: templates/ntp.conf.j2
+        dest: /etc/ntp.conf
+      when: ansible_os_family == "Debian"
+      notify: Restart NTP
+
+    - name: Configure DNS resolver
+      template:
+        src: templates/resolv.conf.j2
+        dest: /etc/resolv.conf
+      when: ansible_os_family == "Debian"
+
+    - name: Enable and configure auditd
+      service:
+        name: auditd
+        state: started
+        enabled: yes
+
+    - name: Configure fail2ban
+      template:
+        src: templates/fail2ban.j2
+        dest: /etc/fail2ban/jail.local
+      when: ansible_os_family == "Debian"
+      notify: Restart fail2ban
+
+    # ============================================================
+    # WINDOWS SERVERS - Domain Controller
+    # ============================================================
+    - name: Install Windows AD DS
+      win_feature:
+        name:
+          - AD-Domain-Services
+          - DNS
+        state: present
+      when: "'dc01' in inventory_hostname"
+
+    - name: Configure Windows Firewall
+      win_firewall:
+        state: enabled
+        profiles: Domain,Private,Public
+      when: ansible_os_family == "Windows"
+
+    - name: Enable Windows Defender
+      win_defender:
+        state: enabled
+        realtime_protection: yes
+      when: ansible_os_family == "Windows"
+
+    # ============================================================
+    # SIEM COMPONENTS
+    # ============================================================
+    - name: Install Wazuh Agent (Debian)
+      apt:
+        deb: https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_4.8.0-1_amd64.deb
+      when: 
+        - ansible_os_family == "Debian"
+        - "'siem' in group_names"
+
+    - name: Configure Wazuh Agent
+      template:
+        src: templates/wazuh_agent.conf.j2
+        dest: /var/ossec/etc/ossec.conf
+      when: "'siem' in group_names"
+      notify: Restart Wazuh Agent
+
+    - name: Install Security Onion requirements
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - python3-pip
+      when: "'securityonion' in inventory_hostname"
+
+    # ============================================================
+    # ENDPOINT PROTECTION - Windows Clients
+    # ============================================================
+    - name: Deploy Wazuh Agent (Windows)
+      win_chocolatey:
+        name: wazuh-agent
+        state: present
+        install_args: /quiet WAZUH_MANAGER={{ wazuh_manager }} WAZUH_REGISTRATION_SERVER={{ wazuh_manager }}
+      when: 
+        - ansible_os_family == "Windows"
+        - "'windows' in group_names"
+
+    - name: Enable Windows Defender
+      win_defender:
+        state: enabled
+      when: ansible_os_family == "Windows"
+
+    # ============================================================
+    # LOG SHIPPING
+    # ============================================================
+    - name: Install Filebeat (Debian)
+      apt:
+        name: filebeat
+        state: present
+      when: 
+        - ansible_os_family == "Debian"
+        - "'siem' in group_names"
+
+    - name: Configure Filebeat
+      template:
+        src: templates/filebeat.yml.j2
+        dest: /etc/filebeat/filebeat.yml
+      when: "'siem' in group_names"
+      notify: Restart Filebeat
+
+    # ============================================================
+    # HARDENING - Linux Systems
+    # ============================================================
+    - name: Configure sysctl parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
+        - { name: "net.ipv4.conf.default.rp_filter", value: "1" }
+        - { name: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+        - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.default.accept_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.send_redirects", value: "0" }
+        - { name: "net.ipv4.conf.default.send_redirects", value: "0" }
+        - { name: "net.ipv4.conf.all.accept_source_route", value: "0" }
+        - { name: "net.ipv4.conf.default.accept_source_route", value: "0" }
+      when: ansible_os_family == "Debian"
+
+    - name: Disable unnecessary services
+      service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - telnet
+        - rsh
+        - rlogin
+        - vsftpd
+      when: ansible_os_family == "Debian"
+      ignore_errors: yes
+
+    # ============================================================
+    # MONITORING - All hosts
+    # ============================================================
+    - name: Install Prometheus Node Exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Enable Prometheus Node Exporter
+      service:
+        name: prometheus-node-exporter
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+
+  handlers:
+    - name: Restart NTP
+      service:
+        name: ntp
+        state: restarted
+
+    - name: Restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
+
+    - name: Restart Wazuh Agent
+      service:
+        name: wazuh-agent
+        state: restarted
+
+    - name: Restart Filebeat
+      service:
+        name: filebeat
+        state: restarted

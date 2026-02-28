@@ -1,0 +1,38 @@
+# Ansible Inventory for Providence SOC
+# Update IPs according to your deployment
+
+[windows]
+dc01 ansible_host=10.10.10.10
+win-srv01 ansible_host=10.10.10.11
+win-client01 ansible_host=10.10.10.100
+
+[linux]
+ubuntu-01 ansible_host=10.10.10.20
+
+[siem]
+securityonion ansible_host=10.10.20.10
+wazuh ansible_host=10.10.20.20
+elasticsearch ansible_host=10.10.20.10
+
+[attacker]
+kali ansible_host=10.10.30.100
+
+[dmz]
+nginx-proxy ansible_host=10.10.40.10
+
+[management]
+jumphost ansible_host=10.10.50.10
+ansible-tower ansible_host=10.10.50.20
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_user=admin
+ansible_connection=ssh
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[windows:vars]
+ansible_user=Administrator
+ansible_password=YourSecurePassword123!
+ansible_connection=winrm
+ansible_winrm_transport=ntlm
+ansible_winrm_server_cert_validation=ignore
