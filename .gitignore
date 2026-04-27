@@ -1,0 +1,118 @@
+# Providence SOC - Git Ignore Patterns
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+terraform.tfplan
+.terraform.lock.hcl
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ansible
+*.retry
+inventory/hosts
+inventory/*.yml
+!inventory/example.yml
+ansible/*.log
+
+# Secrets - CRITICAL - NEVER COMMIT
+terraform.tfvars
+*.tfvars
+*.auto.tfvars
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+credentials/
+*.password
+*.secret
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Package files
+*.deb
+*.rpm
+*.pkg
+*.dmg
+
+# Binary files
+*.exe
+*.bin
+*.dll
+*.so
+*.dylib
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Documentation builds
+docs/_build/
+docs/build/
+site/
+
+# Test artifacts
+.tox/
+.nox/
+*.cover
+.hypothesis/
